@@ -10,7 +10,7 @@
 (def client (make-mosquitto-client
              on-connect: on-connect-callback
              on-message: on-message-callback))
-{client.connect! port: 1884}
+{client.connect! socket: "./test/mosquitto.sock"}
 
 (def job (spawn
           (lambda ()
