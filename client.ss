@@ -18,21 +18,18 @@
         mosquitto-message-topic
         mosquitto-message-payload
         mosquitto-message-qos
-        mosquitto-message-retain
-        ;; mosquitto-connect
-        ;; mosquitto-reinitialise
-        ;; mosquitto-disconnect
-        ;; mosquitto-loop-forever
-        ;; mosquitto-loop
-        ;; mosquitto-publish
-        ;; mosquitto-subscribe
-        ;; mosquitto-unsubscribe
-        ;; mosquitto-mosquitto-lib-version
-        )
+        mosquitto-message-retain)
 
 (begin-ffi (mosquitto-client-ptr
             mosquitto-client-on-connect
-            mosquitto-clients
+            mosquitto-client-on-disconnect
+            mosquitto-client-on-publish
+            mosquitto-client-on-message
+            mosquitto-client-on-subscribe
+            mosquitto-client-on-unsubscribe
+            mosquitto-client-on-log
+            mosquitto-clients-ref
+            mosquitto-log-levels
 
             mosquitto*
             mosquitto_message*
@@ -151,7 +148,13 @@
             mosquitto_message_payloadlen
             mosquitto_message_qos
             mosquitto_message_retain
-            on_connect)
+            on_connect
+            on_disconnect
+            on_publish
+            on_message
+            on_subscribe
+            on_unsubscribe
+            on_log)
   (c-declare "#include <mosquitto.h>")
   (c-declare "#include <mqtt_protocol.h>")
   (c-initialize "mosquitto_lib_init();")
@@ -304,10 +307,55 @@
                  ((= rc CONNACK_REFUSED_IDENTIFIER_REJECTED) 'identifier-rejected)
                  ((= rc CONNACK_REFUSED_PROTOCOL_VERSION) 'protocol-version)
                  (else 'unknown))))
-            (let* ((client (table-ref mosquitto-clients (foreign-address ptr)))
+            (let* ((client (mosquitto-clients-ref ptr))
                    (callback (mosquitto-client-on-connect client)))
               (when (procedure? callback)
-                (callback client)))))
+                (callback client))))
+  (c-define (on_disconnect ptr user-data rc) (mosquitto* (pointer void) int)
+            void "mosquitto_on_disconnect" ""
+            (unless (eq? rc MOSQ_ERR_SUCCESS)
+              (error (mosquitto_strerror rc)
+                (cond
+                 ;; todo: not sure about set of this consts, need to test various disconnect reasons
+                 ((= rc MOSQ_ERR_CONN_REFUSED) 'refused)
+                 ((= rc MOSQ_ERR_CONN_LOST) 'lost)
+                 (else 'unknown))))
+            (let* ((client (mosquitto-clients-ref ptr))
+                   (callback (mosquitto-client-on-disconnect client)))
+              (when (procedure? callback)
+                (callback client))))
+  (c-define (on_publish ptr user-data mid) (mosquitto* (pointer void) int)
+            void "mosquitto_on_publish" ""
+            (let* ((client (mosquitto-clients-ref ptr))
+                   (callback (mosquitto-client-on-publish client)))
+              (when (procedure? callback)
+                (callback client mid))))
+  (c-define (on_message ptr user-data message) (mosquitto* (pointer void) mosquitto_message*)
+            void "mosquitto_on_message" ""
+            (let* ((client (mosquitto-clients-ref ptr))
+                   (callback (mosquitto-client-on-message client)))
+              (when (procedure? callback)
+                (callback client message))))
+  (c-define (on_subscribe ptr user-data mid qos-count granted-qos) (mosquitto* (pointer void) int int (pointer int))
+            ;; todo: should we pass qos-count & granted-qos to user? looks like very low-level kind of things
+            ;; maybe through dynamic scope to make them optional?
+            void "mosquitto_on_subscribe" ""
+            (let* ((client (mosquitto-clients-ref ptr))
+                   (callback (mosquitto-client-on-subscribe client)))
+              (when (procedure? callback)
+                (callback client mid))))
+  (c-define (on_unsubscribe ptr user-data mid) (mosquitto* (pointer void) int)
+            void "mosquitto_on_unsubscribe" ""
+            (let* ((client (mosquitto-clients-ref ptr))
+                   (callback (mosquitto-client-on-unsubscribe client)))
+              (when (procedure? callback)
+                (callback client mid))))
+  (c-define (on_log ptr user-data level str) (mosquitto* (pointer void) int char-string)
+            void "mosquitto_on_log" ""
+            (let* ((client (mosquitto-clients-ref ptr))
+                   (callback (mosquitto-client-on-log client)))
+              (when (procedure? callback)
+                (callback client (alist-ref level mosquitto-log-levels) str)))))
 
 ;;
 
@@ -339,6 +387,9 @@
   (table-set! mosquitto-clients
               (foreign-address (mosquitto-client-ptr mosquitto))
               mosquitto))
+
+(def (mosquitto-clients-ref ptr)
+  (table-ref mosquitto-clients (foreign-address ptr)))
 
 ;;
 
@@ -373,25 +424,24 @@
                  (lambda (ptr) ;; todo: unregister here?
                    (mosquitto_destroy ptr)))
       (mosquitto_connect_callback_set ptr on_connect)
-      ;; (mosquitto_disconnect_callback_set mosquitto (location disconnect_cb))
-      ;; (mosquitto_publish_callback_set mosquitto (location publish_cb))
-      ;; (mosquitto_message_callback_set mosquitto (location message_cb))
-      ;; (mosquitto_subscribe_callback_set mosquitto (location subscribe_cb))
-      ;; (mosquitto_unsubscribe_callback_set mosquitto (location unsubscribe_cb))
-      ;; (mosquitto_log_callback_set mosquitto (location log_cb))
-      ;; ;; attach user callbacks
+      (mosquitto_disconnect_callback_set ptr on_disconnect)
+      (mosquitto_publish_callback_set ptr on_publish)
+      (mosquitto_message_callback_set ptr on_message)
+      (mosquitto_subscribe_callback_set ptr on_subscribe)
+      (mosquitto_unsubscribe_callback_set ptr on_unsubscribe)
+      (mosquitto_log_callback_set ptr on_log)
       (set! (@ self on-connect) on-connect)
-      ;; (set-mosquitto-client-connect-callback! client on-connect)
-      ;; (set-mosquitto-client-disconnect-callback! client on-disconnect)
-      ;; (set-mosquitto-client-publish-callback! client on-publish)
-      ;; (set-mosquitto-client-message-callback! client on-message)
-      ;; (set-mosquitto-client-subscribe-callback! client on-subscribe)
-      ;; (set-mosquitto-client-unsubscribe-callback! client on-unsubscribe)
-      ;; (set-mosquitto-client-log-callback! client on-log)
+      (set! (@ self on-disconnect) on-disconnect)
+      (set! (@ self on-publish) on-publish)
+      (set! (@ self on-message) on-message)
+      (set! (@ self on-subscribe) on-subscribe)
+      (set! (@ self on-unsubscribe) on-unsubscribe)
+      (set! (@ self on-log) on-log)
       self)))
 
 (defmethod {connect! mosquitto-client}
-  (lambda (self host: (host "127.0.0.1")
+  (lambda (self socket: (socket #f)
+                host: (host "127.0.0.1")
                 port: (port 1883)
                 username: (username #f)
                 password: (password #f)
@@ -411,30 +461,69 @@
                 socks5-password: (socks5-password #f)
                 reconnect-delay: (reconnect-delay 1)
                 reconnect-delay-max: (reconnect-delay-max 10)
-                reconnect-exp-backoff: (reconnect-exp-backoff #f)
+                reconnect-exp-backoff: (reconnect-exp-backoff #t)
                 tcp-nodelay: (tcp-nodelay #t))
     (begin0 self
       (let ((ptr (mosquitto-client-ptr self)))
+        (when socket
+          (set! host socket)
+          (set! port 0))
         (when (and username password)
-          (assert-ret-code (mosquitto_username_pw_set ptr username password) 'username/password))
+          (assert-ret-code
+           (mosquitto_username_pw_set ptr username password)
+           'username/password))
         (when (or tls-cafile tls-capath tls-certfile tls-keyfile)
-          (assert-ret-code (mosquitto_tls_set ptr tls-cafile tls-capath tls-certfile tls-keyfile #f) 'tls))
+          (assert-ret-code
+           (mosquitto_tls_set ptr tls-cafile tls-capath
+                              tls-certfile tls-keyfile
+                              #f)
+           'tls))
         (unless tls-insecure
-          (assert-ret-code (mosquitto_tls_insecure_set ptr #f) 'tls-insecure))
+          (assert-ret-code
+           (mosquitto_tls_insecure_set ptr #f)
+           'tls-insecure))
         (when tls-ocsp-required
-          (assert-ret-code (mosquitto_int_option ptr MOSQ_OPT_TLS_OCSP_REQUIRED 1) 'tls-ocsp-required))
+          (assert-ret-code
+           (mosquitto_int_option ptr
+                                 MOSQ_OPT_TLS_OCSP_REQUIRED
+                                 1)
+           'tls-ocsp-required))
         (when tls-use-os-certs
-          (assert-ret-code (mosquitto_int_option ptr MOSQ_OPT_TLS_USE_OS_CERTS 1) 'tls-use-os-certs))
+          (assert-ret-code
+           (mosquitto_int_option ptr
+                                 MOSQ_OPT_TLS_USE_OS_CERTS
+                                 1)
+           'tls-use-os-certs))
         (when tls-alpn
-          (assert-ret-code (mosquitto_string_option ptr MOSQ_OPT_TLS_ALPN tls-alpn) 'tls-alpn))
+          (assert-ret-code
+           (mosquitto_string_option ptr
+                                    MOSQ_OPT_TLS_ALPN
+                                    tls-alpn)
+           'tls-alpn))
         (when bind-address
-          (assert-ret-code (mosquitto_string_option ptr MOSQ_OPT_BIND_ADDRESS bind-address) 'bind-address))
+          (assert-ret-code
+           (mosquitto_string_option ptr
+                                    MOSQ_OPT_BIND_ADDRESS
+                                    bind-address)
+           'bind-address))
         (when socks5-host
-          (assert-ret-code (mosquitto_socks5_set ptr socks5-host socks5-port socks5-username socks5-password) 'socks5))
+          (assert-ret-code
+           (mosquitto_socks5_set ptr
+                                 socks5-host socks5-port
+                                 socks5-username socks5-password)
+           'socks5))
         (when tcp-nodelay
-          (assert-ret-code (mosquitto_int_option ptr MOSQ_OPT_TCP_NODELAY 1) 'tcp-nodelay))
-        (assert-ret-code (mosquitto_reconnect_delay_set ptr reconnect-delay reconnect-delay-max reconnect-exp-backoff) 'reconnect-delay)
-        (assert-ret-code (mosquitto_connect ptr host port keepalive) 'connect)))))
+          (assert-ret-code
+           (mosquitto_int_option ptr MOSQ_OPT_TCP_NODELAY 1)
+           'tcp-nodelay))
+        (assert-ret-code
+         (mosquitto_reconnect_delay_set ptr
+                                        reconnect-delay reconnect-delay-max
+                                        reconnect-exp-backoff)
+         'reconnect-delay)
+        (assert-ret-code
+         (mosquitto_connect ptr host port keepalive)
+         'connect)))))
 
 (defmethod {loop mosquitto-client}
   (lambda (self (timeout 1000))
