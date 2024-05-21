@@ -19,6 +19,9 @@
               (thread-yield!)
               (loop)))))
 {client.subscribe! "test"}
+(spawn (lambda ()
+         (thread-sleep! 1)
+         {client.publish! "test" (string->utf8 "halo")}))
 (wait job)
 
 (displayln 'main-loop-finished)

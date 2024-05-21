@@ -246,6 +246,13 @@
   (define MOSQ_OPT_BIND_ADDRESS ((c-lambda () mosquitto_opt "___result = MOSQ_OPT_BIND_ADDRESS;")))
   (define MOSQ_OPT_TLS_USE_OS_CERTS ((c-lambda () mosquitto_opt "___result = MOSQ_OPT_TLS_USE_OS_CERTS;")))
 
+  (c-declare "
+    int ffi_mosquitto_publish(struct mosquitto *mosq, int *mid, char *topic, int payloadlen, ___SCMOBJ bytes, int qos, bool retain)
+    {
+      return mosquitto_publish(mosq, mid, topic, payloadlen, U8_DATA (bytes), qos, retain);
+    }
+  ")
+
   (define-c-lambda mosquitto_new (char-string bool (pointer void)) mosquitto* "mosquitto_new")
   (define-c-lambda mosquitto_destroy (mosquitto*) void "mosquitto_destroy")
   (define-c-lambda mosquitto_lib_version ((pointer int) (pointer int) (pointer int)) int "mosquitto_lib_version")
@@ -260,7 +267,7 @@
   (define-c-lambda mosquitto_disconnect (mosquitto*) int "mosquitto_disconnect")
   (define-c-lambda mosquitto_reconnect (mosquitto*) int "mosquitto_reconnect")
   (define-c-lambda mosquitto_reconnect_async (mosquitto*) int "mosquitto_reconnect_async")
-  (define-c-lambda mosquitto_publish (mosquitto* (pointer int) char-string int (pointer void) int bool) int "mosquitto_publish")
+  (define-c-lambda mosquitto_publish (mosquitto* (pointer int) char-string int scheme-object int bool) int "ffi_mosquitto_publish")
   (define-c-lambda mosquitto_subscribe (mosquitto* (pointer int) char-string int) int "mosquitto_subscribe")
   (define-c-lambda mosquitto_unsubscribe (mosquitto* (pointer int) char-string) int "mosquitto_unsubscribe")
   (define-c-lambda mosquitto_loop_forever (mosquitto* int int) int "mosquitto_loop_forever")
@@ -567,6 +574,13 @@
   (lambda (self sub (qos 0))
     (let (mid (mosquitto_make_int_ptr))
       (assert-ret-code (mosquitto_subscribe self.ptr mid sub qos))
+      mid)))
+
+(defmethod {publish! mosquitto-client}
+  (lambda (self topic payload qos: (qos 0) retain: (retain #f))
+    (let ((mid (mosquitto_make_int_ptr))
+          (len (if (void? payload) 0 (u8vector-length payload))))
+      (assert-ret-code (mosquitto_publish self.ptr mid topic len payload qos retain))
       mid)))
 
 (defmethod {loop mosquitto-client}
