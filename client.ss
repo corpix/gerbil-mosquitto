@@ -30,6 +30,7 @@
             mosquitto-client-on-log
             mosquitto-clients-ref
             mosquitto-log-levels
+            make-mosquitto-message
 
             mosquitto*
             mosquitto_message*
@@ -145,9 +146,11 @@
             mosquitto_sub_topic_check
             mosquitto_message_mid
             mosquitto_message_topic
+            mosquitto_message_payload
             mosquitto_message_payloadlen
             mosquitto_message_qos
             mosquitto_message_retain
+            mosquitto_make_int_ptr
             on_connect
             on_disconnect
             on_publish
@@ -158,10 +161,26 @@
   (c-declare "#include <mosquitto.h>")
   (c-declare "#include <mqtt_protocol.h>")
   (c-initialize "mosquitto_lib_init();")
+  (c-declare "
+    #ifndef ___HAVE_FFI_MOSQUITTO_FREE
+    #define ___HAVE_FFI_MOSQUITTO_FREE
+    ___SCMOBJ ffi_mosquitto_free (void *ptr)
+    {
+      free (ptr);
+      return ___FIX (___NO_ERR);
+    }
+    #endif
 
-  (c-define-type mosquitto* (pointer (struct "mosquitto")))
+    static int *ffi_mosquitto_make_int_ptr ()
+    {
+      return (int*)malloc (sizeof (int));
+    }
+  ")
+
+  (c-define-type mosquitto* (pointer (struct "mosquitto") (mosquitto*)))
   (c-define-type mosquitto_message* (pointer (struct "mosquitto_message")))
   (c-define-type mosquitto_opt int)
+  (c-define-type int* (pointer int (int*) "ffi_mosquitto_free"))
 
   (define-const MOSQ_LOG_INFO)
   (define-const MOSQ_LOG_NOTICE)
@@ -263,27 +282,31 @@
   (define-c-lambda mosquitto_tls_psk_set (mosquitto* char-string char-string char-string) int "mosquitto_tls_psk_set")
 
   (c-declare "
-    void mosquitto_message_callback_set_wrapper(struct mosquitto *mosq, void (*on_message)(struct mosquitto *, void *, struct mosquitto_message *))
+    void ffi_mosquitto_message_callback_set(struct mosquitto *mosq, void (*on_message)(struct mosquitto *, void *, struct mosquitto_message *))
     {
       mosquitto_message_callback_set(mosq, (void (*)(struct mosquitto *, void *, const struct mosquitto_message *))on_message);
     }
-    void mosquitto_subscribe_callback_set_wrapper(struct mosquitto *mosq, void (*on_subscribe)(struct mosquitto *, void *, int, int, int *))
+    void ffi_mosquitto_subscribe_callback_set(struct mosquitto *mosq, void (*on_subscribe)(struct mosquitto *, void *, int, int, int *))
     {
       mosquitto_subscribe_callback_set(mosq, (void (*)(struct mosquitto *, void *, int, int, const int *))on_subscribe);
     }
-    void mosquitto_log_callback_set_wrapper(struct mosquitto *mosq, void (*on_log)(struct mosquitto *, void *, int, char *))
+    void ffi_mosquitto_log_callback_set(struct mosquitto *mosq, void (*on_log)(struct mosquitto *, void *, int, char *))
     {
       mosquitto_log_callback_set(mosq, (void (*)(struct mosquitto *, void *, int, const char *))on_log);
+    }
+    void ffi_mosquitto_message_payload_get(struct mosquitto_message* message, ___SCMOBJ bytes)
+    {
+      memcpy(U8_DATA (bytes), message->payload, message->payloadlen);
     }
   ")
   (define-c-lambda mosquitto_connect_callback_set (mosquitto* (function (mosquitto* (pointer void) int) void)) void "mosquitto_connect_callback_set")
   (define-c-lambda mosquitto_connect_callback_set (mosquitto* (function (mosquitto* (pointer void) int) void)) void "mosquitto_connect_callback_set")
   (define-c-lambda mosquitto_disconnect_callback_set (mosquitto* (function (mosquitto* (pointer void) int) void)) void "mosquitto_disconnect_callback_set")
   (define-c-lambda mosquitto_publish_callback_set (mosquitto* (function (mosquitto* (pointer void) int) void)) void "mosquitto_publish_callback_set")
-  (define-c-lambda mosquitto_message_callback_set (mosquitto* (function (mosquitto* (pointer void) mosquitto_message*) void)) void "mosquitto_message_callback_set_wrapper")
-  (define-c-lambda mosquitto_subscribe_callback_set (mosquitto* (function (mosquitto* (pointer void) int int (pointer int)) void)) void "mosquitto_subscribe_callback_set_wrapper")
+  (define-c-lambda mosquitto_message_callback_set (mosquitto* (function (mosquitto* (pointer void) mosquitto_message*) void)) void "ffi_mosquitto_message_callback_set")
+  (define-c-lambda mosquitto_subscribe_callback_set (mosquitto* (function (mosquitto* (pointer void) int int (pointer int)) void)) void "ffi_mosquitto_subscribe_callback_set")
   (define-c-lambda mosquitto_unsubscribe_callback_set (mosquitto* (function (mosquitto* (pointer void) int) void)) void "mosquitto_unsubscribe_callback_set")
-  (define-c-lambda mosquitto_log_callback_set (mosquitto* (function (mosquitto* (pointer void) int char-string) void)) void "mosquitto_log_callback_set_wrapper")
+  (define-c-lambda mosquitto_log_callback_set (mosquitto* (function (mosquitto* (pointer void) int char-string) void)) void "ffi_mosquitto_log_callback_set")
 
   (define-c-lambda mosquitto_strerror (int) char-string "___return((char*)mosquitto_strerror(___arg1));")
   (define-c-lambda mosquitto_connack_string (int) char-string "___return((char*)mosquitto_connack_string(___arg1));")
@@ -292,9 +315,12 @@
   (define-c-lambda mosquitto_sub_topic_check (char-string) int "mosquitto_sub_topic_check")
   (define-c-lambda mosquitto_message_mid (mosquitto_message*) int "___return(___arg1->mid);")
   (define-c-lambda mosquitto_message_topic (mosquitto_message*) char-string "___return(___arg1->topic);")
+  (define-c-lambda mosquitto_message_payload_get (mosquitto_message* scheme-object) void "ffi_mosquitto_message_payload_get")
   (define-c-lambda mosquitto_message_payloadlen (mosquitto_message*) int "___return(___arg1->payloadlen);")
   (define-c-lambda mosquitto_message_qos (mosquitto_message*) int "___return(___arg1->qos);")
   (define-c-lambda mosquitto_message_retain (mosquitto_message*) bool "___return(___arg1->retain);")
+
+  (define-c-lambda mosquitto_make_int_ptr () int* "ffi_mosquitto_make_int_ptr")
 
   (c-define (on_connect ptr user-data rc) (mosquitto* (pointer void) int)
             void "mosquitto_on_connect" ""
@@ -335,7 +361,18 @@
             (let* ((client (mosquitto-clients-ref ptr))
                    (callback (mosquitto-client-on-message client)))
               (when (procedure? callback)
-                (callback client message))))
+                (callback client
+                          (let* ((len (mosquitto_message_payloadlen message))
+                                 (blob (void)))
+                            (unless (zero? len)
+                              (set! blob (make-u8vector len))
+                              (mosquitto_message_payload_get message blob))
+                            (make-mosquitto-message
+                             (mosquitto_message_mid message)
+                             (mosquitto_message_topic message)
+                             blob
+                             (mosquitto_message_qos message)
+                             (mosquitto_message_retain message)))))))
   (c-define (on_subscribe ptr user-data mid qos-count granted-qos) (mosquitto* (pointer void) int int (pointer int))
             ;; todo: should we pass qos-count & granted-qos to user? looks like very low-level kind of things
             ;; maybe through dynamic scope to make them optional?
@@ -355,7 +392,8 @@
             (let* ((client (mosquitto-clients-ref ptr))
                    (callback (mosquitto-client-on-log client)))
               (when (procedure? callback)
-                (callback client (alist-ref level mosquitto-log-levels) str)))))
+                (let ((level-name (assoc level mosquitto-log-levels)))
+                  (callback client (cdr level-name) str))))))
 
 ;;
 
@@ -524,6 +562,12 @@
         (assert-ret-code
          (mosquitto_connect ptr host port keepalive)
          'connect)))))
+
+(defmethod {subscribe! mosquitto-client}
+  (lambda (self sub (qos 0))
+    (let (mid (mosquitto_make_int_ptr))
+      (assert-ret-code (mosquitto_subscribe self.ptr mid sub qos))
+      mid)))
 
 (defmethod {loop mosquitto-client}
   (lambda (self (timeout 1000))
