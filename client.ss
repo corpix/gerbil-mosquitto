@@ -591,6 +591,20 @@
   (lambda (self (timeout 1000))
     (assert-ret-code (mosquitto_loop_forever self.ptr timeout 1) 'loop-forever)))
 
+(defmethod {spawn mosquitto-client}
+  (lambda (self wait-timeout: (wait-timeout 10)
+                on-error: (on-error void))
+    (spawn
+     (lambda ()
+       (let loop ()
+         (and (try {self.loop wait-timeout}
+                   (thread-yield!)
+                   #t
+                   (catch (exn)
+                     (on-error exn)
+                     #f))
+              (loop)))))))
+
 ;;
 
 (defstruct mosquitto-message
