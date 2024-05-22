@@ -595,6 +595,7 @@
 
 (defmethod {disconnect! mosquitto-client}
   (lambda (self)
+    ;; fixme: hmmm, for some reason it fails with arity mistmatch, wtf?
     (assert-ret-code (mosquitto_disconnect self.ptr) 'disconnect)))
 
 (defmethod {loop mosquitto-client}
