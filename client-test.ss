@@ -63,7 +63,7 @@
 
 (def client-test
   (test-suite "test client"
-    (test-case ""
+    (test-case "integration test"
       (def connected #f)
       (def messages 0)
       (def disconnected #f)
