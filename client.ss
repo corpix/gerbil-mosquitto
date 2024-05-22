@@ -1,4 +1,5 @@
-(import :std/foreign)
+(import :std/foreign
+        :std/sugar)
 (export make-mosquitto-client
         mosquitto-clients
         mosquitto-client
@@ -573,15 +574,28 @@
 (defmethod {subscribe! mosquitto-client}
   (lambda (self sub (qos 0))
     (let (mid (mosquitto_make_int_ptr))
-      (assert-ret-code (mosquitto_subscribe self.ptr mid sub qos))
+      (assert-ret-code (mosquitto_subscribe self.ptr mid sub qos)
+                       'subscribe)
+      mid)))
+
+(defmethod {unsubscribe! mosquitto-client}
+  (lambda (self sub)
+    (let (mid (mosquitto_make_int_ptr))
+      (assert-ret-code (mosquitto_unsubscribe self.ptr mid sub)
+                       'unsubscribe)
       mid)))
 
 (defmethod {publish! mosquitto-client}
   (lambda (self topic payload qos: (qos 0) retain: (retain #f))
     (let ((mid (mosquitto_make_int_ptr))
           (len (if (void? payload) 0 (u8vector-length payload))))
-      (assert-ret-code (mosquitto_publish self.ptr mid topic len payload qos retain))
+      (assert-ret-code (mosquitto_publish self.ptr mid topic len payload qos retain)
+                       'publish)
       mid)))
+
+(defmethod {disconnect! mosquitto-client}
+  (lambda (self)
+    (assert-ret-code (mosquitto_disconnect self.ptr) 'disconnect)))
 
 (defmethod {loop mosquitto-client}
   (lambda (self (timeout 1000))
