@@ -30,8 +30,8 @@
                                   path: "mosquitto"
                                   arguments: ["-c" mosquitto-config-path]
                                   stdin-redirection: #f
-                                  stdout-redirection: #t
-                                  stderr-redirection: #t])
+                                  stdout-redirection: #f
+                                  stderr-redirection: #f])
                        (process (open-process settings)))
                   (try
                    (when (eq? query 'pid)
