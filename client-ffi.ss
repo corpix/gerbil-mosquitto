@@ -75,11 +75,8 @@
             mosquitto_username_pw_set
             mosquitto_connect
             mosquitto_connect_bind
-            mosquitto_connect_async
-            mosquitto_connect_bind_async
             mosquitto_disconnect
             mosquitto_reconnect
-            mosquitto_reconnect_async
             mosquitto_publish
             mosquitto_subscribe
             mosquitto_unsubscribe
@@ -224,11 +221,8 @@
   (define-c-lambda mosquitto_username_pw_set (mosquitto* char-string char-string) int "mosquitto_username_pw_set")
   (define-c-lambda mosquitto_connect (mosquitto* char-string int int) int "mosquitto_connect")
   (define-c-lambda mosquitto_connect_bind (mosquitto* char-string int int char-string) int "mosquitto_connect_bind")
-  (define-c-lambda mosquitto_connect_async (mosquitto* char-string int int) int "mosquitto_connect_async")
-  (define-c-lambda mosquitto_connect_bind_async (mosquitto* char-string int int char-string) int "mosquitto_connect_bind_async")
   (define-c-lambda mosquitto_disconnect (mosquitto*) int "mosquitto_disconnect")
   (define-c-lambda mosquitto_reconnect (mosquitto*) int "mosquitto_reconnect")
-  (define-c-lambda mosquitto_reconnect_async (mosquitto*) int "mosquitto_reconnect_async")
   (define-c-lambda mosquitto_publish (mosquitto* (pointer int) char-string int scheme-object int bool) int "ffi_mosquitto_publish")
   (define-c-lambda mosquitto_subscribe (mosquitto* (pointer int) char-string int) int "mosquitto_subscribe")
   (define-c-lambda mosquitto_unsubscribe (mosquitto* (pointer int) char-string) int "mosquitto_unsubscribe")
