@@ -7,8 +7,8 @@ all: build
 build:
 	gxc -ld-options -lmosquitto client-ffi.ss client.ss
 
-.PHONY: mqtt
-mqtt:
+.PHONY: mosquitto
+mosquitto:
 	mosquitto -c test/mosquitto.conf
 
 .PHONY: test
