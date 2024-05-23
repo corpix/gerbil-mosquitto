@@ -114,10 +114,7 @@
             mosquitto_message_payload
             mosquitto_message_payloadlen
             mosquitto_message_qos
-            mosquitto_message_retain
-
-            mosquitto_make_int_ptr
-            int*->number)
+            mosquitto_message_retain)
   (c-declare "#include <mosquitto.h>")
   (c-declare "#include <mqtt_protocol.h>")
   (c-initialize "mosquitto_lib_init();")
@@ -131,11 +128,6 @@
       return ___FIX (___NO_ERR);
     }
     #endif
-
-    static int *ffi_mosquitto_make_int_ptr ()
-    {
-      return (int*)malloc (sizeof (int));
-    }
   ")
   (c-define-type mosquitto* (pointer (struct "mosquitto")))
   (c-define-type mosquitto_message* (pointer (struct "mosquitto_message")))
@@ -281,7 +273,4 @@
   (define-c-lambda mosquitto_message_payload_get (mosquitto_message* scheme-object) void "ffi_mosquitto_message_payload_get")
   (define-c-lambda mosquitto_message_payloadlen (mosquitto_message*) int "___return(___arg1->payloadlen);")
   (define-c-lambda mosquitto_message_qos (mosquitto_message*) int "___return(___arg1->qos);")
-  (define-c-lambda mosquitto_message_retain (mosquitto_message*) bool "___return(___arg1->retain);")
-
-  (define-c-lambda mosquitto_make_int_ptr () int* "ffi_mosquitto_make_int_ptr")
-  (define-c-lambda int*->number (int*) int "___return(*___arg1);"))
+  (define-c-lambda mosquitto_message_retain (mosquitto_message*) bool "___return(___arg1->retain);"))
