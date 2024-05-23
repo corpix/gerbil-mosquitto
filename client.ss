@@ -333,6 +333,8 @@
          (if (error? result) (on-error result)
              (loop)))))))
 
+;;
+
 (def mosquitto-lib-version
   (let ((major (mosquitto_make_int_ptr))
         (minor (mosquitto_make_int_ptr))

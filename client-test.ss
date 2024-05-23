@@ -2,8 +2,8 @@
         :std/test
         :std/logger
         :std/event
-        :std/actor
         :std/sugar
+        :std/iter
         :std/format
         :std/misc/ports
         :std/misc/process
@@ -15,50 +15,36 @@
 (current-logger-options 'info)
 
 (def socket-path "./test/mosquitto.sock")
-(def mosquitto-job (void))
-(def mosquitto-pid (void))
-
+(def pid-path "./test/mosquitto.pid")
 (def mosquitto-config-path
   (or (get-environment-variable "MOSQUITTO_CONFIG_PATH")
       "test/mosquitto.conf"))
+(def mosquitto-job (void))
 
 (def (start-mosquitto!)
-  (if (file-exists? socket-path)
-    (delete-file socket-path))
-  (spawn (lambda ()
-           (<- (query
-                (let* ((settings [
-                                  path: "mosquitto"
-                                  arguments: ["-c" mosquitto-config-path]
-                                  stdin-redirection: #f
-                                  stdout-redirection: #f
-                                  stderr-redirection: #f])
-                       (process (open-process settings)))
-                  (try
-                   (when (eq? query 'pid)
-                     (--> (process-pid process)))
-                   (def result (read-all-as-string process))
-                   (def status (process-status process))
-                   (unless (zero? status)
-                     (error (format "mosquitto exited with code ~a" status)))
-                   result
-                   (finally
-                    (close-port process)
-                    (process-status process)))))))))
+  (for (path [socket-path pid-path])
+    (if (file-exists? path)
+      (delete-file path)))
+  (begin0 (spawn (lambda ()
+                   (run-process/batch
+                    ["mosquitto" "-c" mosquitto-config-path])))
+    (sync (handle-evt 5 (lambda () (error "timed out waiting for mosquitto to start")))
+          (spawn (lambda ()
+                   (let loop ()
+                     (unless (file-exists? pid-path)
+                       (thread-sleep! 0.01)
+                       (loop))))))))
 
 (def (test-setup!)
   (start-logger!)
   (infof "using lib version ~a" mosquitto-lib-version)
   (set! mosquitto-job (start-mosquitto!))
   (infof "using mosquitto configuration path ~a" mosquitto-config-path)
-  (set! mosquitto-pid (->> mosquitto-job 'pid))
-  (infof "running mosquitto with pid ~a" mosquitto-pid))
+  (infof "running mosquitto with pid ~a" (read-file-string pid-path)))
 
 (def (test-cleanup!)
-  (run-process ["kill" "-SIGTERM" (number->string mosquitto-pid)])
-  (sync (handle-evt 5
-                    (lambda _
-                      (error "mosquitto termination timeout")))
+  (run-process ["kill" "-SIGTERM" (read-file-string pid-path)])
+  (sync (handle-evt 5 (lambda () (error "mosquitto termination timeout")))
         mosquitto-job))
 
 ;;
