@@ -178,7 +178,7 @@
     }
   ")
 
-  (c-define-type mosquitto* (pointer (struct "mosquitto") (mosquitto*)))
+  (c-define-type mosquitto* (pointer (struct "mosquitto")))
   (c-define-type mosquitto_message* (pointer (struct "mosquitto_message")))
   (c-define-type mosquitto_opt int)
   (c-define-type int* (pointer int (int*) "ffi_mosquitto_free"))
@@ -595,7 +595,6 @@
 
 (defmethod {disconnect! mosquitto-client}
   (lambda (self)
-    ;; fixme: hmmm, for some reason it fails with arity mistmatch, wtf?
     (assert-ret-code (mosquitto_disconnect self.ptr) 'disconnect)))
 
 (defmethod {loop mosquitto-client}
@@ -612,13 +611,12 @@
     (spawn
      (lambda ()
        (let loop ()
-         (and (try {self.loop wait-timeout}
-                   (thread-yield!)
-                   #t
-                   (catch (exn)
-                     (on-error exn)
-                     #f))
-              (loop)))))))
+         (def result
+           (try {self.loop wait-timeout}
+                (thread-yield!)
+                (catch (exn) exn)))
+         (if (error? result) (on-error result)
+             (loop)))))))
 
 ;;
 
