@@ -235,7 +235,8 @@
                 reconnect-delay: (reconnect-delay 1)
                 reconnect-delay-max: (reconnect-delay-max 10)
                 reconnect-exp-backoff: (reconnect-exp-backoff #t)
-                tcp-nodelay: (tcp-nodelay #t))
+                tcp-nodelay: (tcp-nodelay #t)
+                clear-will: (clear-will? #f))
     (begin0 self
       (let ((ptr (mosquitto-client-ptr self)))
         (when socket
@@ -294,6 +295,8 @@
                                         reconnect-delay reconnect-delay-max
                                         reconnect-exp-backoff)
          'reconnect-delay)
+        (when clear-will?
+          (assert-ret-code (mosquitto_will_clear ptr) 'clear-will))
         (assert-ret-code
          (mosquitto_connect ptr host port keepalive)
          'connect)))))
@@ -311,6 +314,12 @@
       (assert-ret-code (mosquitto_unsubscribe self.ptr mid sub)
                        'unsubscribe)
       (int*->number mid))))
+
+(defmethod {will! mosquitto-client}
+  (lambda (self topic payload qos: (qos 0) retain: (retain #f))
+    (let ((len (if (void? payload) 0 (u8vector-length payload))))
+      (assert-ret-code (mosquitto_will_set self.ptr topic len payload qos retain)
+                       'will))))
 
 (defmethod {publish! mosquitto-client}
   (lambda (self topic payload qos: (qos 0) retain: (retain #f))

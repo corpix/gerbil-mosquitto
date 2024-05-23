@@ -199,6 +199,10 @@
   (define MOSQ_OPT_TLS_USE_OS_CERTS ((c-lambda () mosquitto_opt "___result = MOSQ_OPT_TLS_USE_OS_CERTS;")))
 
   (c-declare "
+    int ffi_mosquitto_will_set(struct mosquitto *mosq, char *topic, int payloadlen, ___SCMOBJ bytes, int qos, bool retain)
+    {
+      return mosquitto_will_set(mosq, topic, payloadlen, U8_DATA (bytes), qos, retain);
+    }
     int ffi_mosquitto_publish(struct mosquitto *mosq, int *mid, char *topic, int payloadlen, ___SCMOBJ bytes, int qos, bool retain)
     {
       return mosquitto_publish(mosq, mid, topic, payloadlen, U8_DATA (bytes), qos, retain);
@@ -208,7 +212,7 @@
   (define-c-lambda mosquitto_destroy (mosquitto*) void "mosquitto_destroy")
   (define-c-lambda mosquitto_lib_version ((pointer int) (pointer int) (pointer int)) int "mosquitto_lib_version")
   (define-c-lambda mosquitto_reinitialise (mosquitto* char-string bool (pointer void)) int "mosquitto_reinitialise")
-  (define-c-lambda mosquitto_will_set (mosquitto* char-string int char-string int bool) int "mosquitto_will_set")
+  (define-c-lambda mosquitto_will_set (mosquitto* char-string int scheme-object int bool) int "ffi_mosquitto_will_set")
   (define-c-lambda mosquitto_will_clear (mosquitto*) int "mosquitto_will_clear")
   (define-c-lambda mosquitto_username_pw_set (mosquitto* char-string char-string) int "mosquitto_username_pw_set")
   (define-c-lambda mosquitto_connect (mosquitto* char-string int int) int "mosquitto_connect")

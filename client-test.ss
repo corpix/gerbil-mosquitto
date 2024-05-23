@@ -84,4 +84,13 @@
         (sync (handle-evt 1 void) job)
         (check messages => 3)
         {client.disconnect!}
+        (sync (handle-evt 5 (lambda () (error "timed out waiting loop to finish"))) job))
+      (test-case "will"
+        (set! job {client.spawn on-error: assert-loop-error})
+        ;; fixme: improve this part to check if will really working,
+        ;; I mean not just "ffi call finished without sigsegv"
+        {client.will! "will-test" (string->utf8 "here is the will")}
+        {client.reconnect!}
+        (sync (handle-evt 1 void) job)
+        {client.disconnect!}
         (sync (handle-evt 5 (lambda () (error "timed out waiting loop to finish"))) job)))))
