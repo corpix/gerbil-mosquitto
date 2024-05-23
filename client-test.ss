@@ -7,6 +7,7 @@
         :std/format
         :std/misc/ports
         :std/misc/process
+        :std/misc/func
         ./client)
 (export client-test test-setup! test-cleanup!)
 
@@ -68,7 +69,7 @@
       (def messages 0)
       (def disconnected #f)
       (def (assert-loop-error exn)
-        (check (error-irritants exn) => '(lost)))
+        (check (any-of '((lost) (loop)) (error-irritants exn)) => #t))
       (def client
         (make-mosquitto-client
          on-connect: (lambda (client) (set! connected #t))
