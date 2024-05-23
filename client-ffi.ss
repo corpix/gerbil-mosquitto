@@ -118,7 +118,9 @@
             mosquitto_message_payloadlen
             mosquitto_message_qos
             mosquitto_message_retain
-            mosquitto_make_int_ptr)
+
+            mosquitto_make_int_ptr
+            int*->number)
   (c-declare "#include <mosquitto.h>")
   (c-declare "#include <mqtt_protocol.h>")
   (c-initialize "mosquitto_lib_init();")
@@ -287,4 +289,5 @@
   (define-c-lambda mosquitto_message_qos (mosquitto_message*) int "___return(___arg1->qos);")
   (define-c-lambda mosquitto_message_retain (mosquitto_message*) bool "___return(___arg1->retain);")
 
-  (define-c-lambda mosquitto_make_int_ptr () int* "ffi_mosquitto_make_int_ptr"))
+  (define-c-lambda mosquitto_make_int_ptr () int* "ffi_mosquitto_make_int_ptr")
+  (define-c-lambda int*->number (int*) int "___return(*___arg1);"))

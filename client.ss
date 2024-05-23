@@ -19,7 +19,9 @@
         mosquitto-message-topic
         mosquitto-message-payload
         mosquitto-message-qos
-        mosquitto-message-retain)
+        mosquitto-message-retain
+
+        mosquitto-lib-version)
 
 ;; note: have no idea why it is not working like this (begin-ffi (mosquitto* ...) ...)
 ;; so just including ffi here to simplify things
@@ -289,14 +291,14 @@
     (let (mid (mosquitto_make_int_ptr))
       (assert-ret-code (mosquitto_subscribe self.ptr mid sub qos)
                        'subscribe)
-      mid)))
+      (int*->number mid))))
 
 (defmethod {unsubscribe! mosquitto-client}
   (lambda (self sub)
     (let (mid (mosquitto_make_int_ptr))
       (assert-ret-code (mosquitto_unsubscribe self.ptr mid sub)
                        'unsubscribe)
-      mid)))
+      (int*->number mid))))
 
 (defmethod {publish! mosquitto-client}
   (lambda (self topic payload qos: (qos 0) retain: (retain #f))
@@ -304,7 +306,7 @@
           (len (if (void? payload) 0 (u8vector-length payload))))
       (assert-ret-code (mosquitto_publish self.ptr mid topic len payload qos retain)
                        'publish)
-      mid)))
+      (int*->number mid))))
 
 (defmethod {disconnect! mosquitto-client}
   (lambda (self)
@@ -330,6 +332,15 @@
                 (catch (exn) exn)))
          (if (error? result) (on-error result)
              (loop)))))))
+
+(def mosquitto-lib-version
+  (let ((major (mosquitto_make_int_ptr))
+        (minor (mosquitto_make_int_ptr))
+        (rev (mosquitto_make_int_ptr)))
+    (mosquitto_lib_version major minor rev)
+    (list (int*->number major)
+          (int*->number minor)
+          (int*->number rev))))
 
 ;;
 

@@ -48,6 +48,7 @@
 
 (def (test-setup!)
   (start-logger!)
+  (infof "using lib version ~a" mosquitto-lib-version)
   (set! mosquitto-job (start-mosquitto!))
   (infof "using mosquitto configuration path ~a" mosquitto-config-path)
   (set! mosquitto-pid (->> mosquitto-job 'pid))
