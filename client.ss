@@ -308,6 +308,10 @@
                        'publish)
       (int*->number mid))))
 
+(defmethod {reconnect! mosquitto-client}
+  (lambda (self)
+    (assert-ret-code (mosquitto_reconnect self.ptr) 'recconnect)))
+
 (defmethod {disconnect! mosquitto-client}
   (lambda (self)
     (assert-ret-code (mosquitto_disconnect self.ptr) 'disconnect)))

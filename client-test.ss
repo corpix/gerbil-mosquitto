@@ -55,6 +55,7 @@
       (def connected #f)
       (def messages 0)
       (def disconnected #f)
+      (def job (void))
       (def (assert-loop-error exn)
         (check (any-of '((lost) (loop)) (error-irritants exn)) => #t))
       (def client
@@ -63,14 +64,24 @@
          on-message: (lambda (client message) (set! messages (+ 1 messages)))
          on-disconnect: (lambda (client) (set! disconnected #t))))
       (check (sync (handle-evt 1 void) mosquitto-job) => (void))
-      {client.connect! socket: socket-path}
-      (def job {client.spawn on-error: assert-loop-error})
-      {client.subscribe! "test"}
-      {client.publish! "test" (string->utf8 "halo")}
-      {client.publish! "test" (string->utf8 "worl")}
-      (sync (handle-evt 1 void) job)
-      {client.disconnect!}
-      (sync (handle-evt 1 void) job)
-      (check connected => #t)
-      (check disconnected => #t)
-      (check messages => 2))))
+      (test-case "sub-pub"
+        {client.connect! socket: socket-path}
+        (set! job {client.spawn on-error: assert-loop-error})
+        {client.subscribe! "test"}
+        {client.publish! "test" (string->utf8 "halo")}
+        {client.publish! "test" (string->utf8 "worl")}
+        (sync (handle-evt 1 void) job)
+        {client.disconnect!}
+        (sync (handle-evt 5 (lambda () (error "timed out waiting loop to finish"))) job)
+        (check connected => #t)
+        (check disconnected => #t)
+        (check messages => 2))
+      (test-case "reconnect"
+        (set! job {client.spawn on-error: assert-loop-error})
+        {client.reconnect!}
+        {client.subscribe! "test"}
+        {client.publish! "test" (string->utf8 "halo again")}
+        (sync (handle-evt 1 void) job)
+        (check messages => 3)
+        {client.disconnect!}
+        (sync (handle-evt 5 (lambda () (error "timed out waiting loop to finish"))) job)))))
