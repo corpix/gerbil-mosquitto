@@ -5,7 +5,7 @@ all: build
 
 .PHONY: build
 build:
-	gxc -ld-options -lmosquitto client-ffi.ss client.ss
+	gxc -ld-options -lmosquitto client-ffi.ss client.ss example.ss
 
 .PHONY: mosquitto
 mosquitto:
