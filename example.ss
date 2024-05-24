@@ -12,7 +12,7 @@
                  (displayln (format "got a message on topic ~a with payload ~a"
                                     (@ message topic)
                                     (utf8->string (@ message payload)))))
-   on-disconnect: (lambda (client) (dispalyln "disconnected :("))))
+   on-disconnect: (lambda (client) (displayln "disconnected :("))))
 
 {client.connect! socket: "./test/mosquitto.sock"}
 
