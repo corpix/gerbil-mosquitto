@@ -347,16 +347,18 @@
 
 (defmethod {spawn mosquitto-client}
   (lambda (self wait-timeout: (wait-timeout 10)
-                on-error: (on-error void))
+                on-error: (on-error #f))
     (spawn
      (lambda ()
        (let loop ()
          (def result
            (try {self.loop wait-timeout}
-                (thread-yield!)
-                (catch (exn) exn)))
-         (if (error? result) (on-error result)
-             (loop)))))))
+                (catch (exn)
+                  (when on-error (on-error exn))
+                  exn)))
+         (unless (error? result)
+           (thread-yield!)
+           (loop)))))))
 
 ;;
 
