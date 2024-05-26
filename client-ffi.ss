@@ -82,7 +82,7 @@
             mosquitto_unsubscribe
             mosquitto_loop_forever
             mosquitto_loop
-            mosquitto_loop_start
+            mosquitto_loop_start ;; not recommended, see f93acbb3df8cd2d9f4efd1c1d91b64f684707d32, I've had problems with separate thread
             mosquitto_loop_stop
             mosquitto_loop_read
             mosquitto_loop_write

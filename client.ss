@@ -359,13 +359,13 @@
   (lambda (self)
     (assert-ret-code (mosquitto_disconnect self.ptr) 'disconnect)))
 
-(defmethod {loop-start! mosquitto-client}
-  (lambda (self)
-    (assert-ret-code (mosquitto_loop_start self.ptr) 'loop-start)))
-
-(defmethod {loop-stop! mosquitto-client}
-  (lambda (self (force? #f))
-    (assert-ret-code (mosquitto_loop_stop self.ptr force?) 'loop-stop)))
+(defmethod {loop! mosquitto-client}
+  (lambda (self timeout: (timeout 10))
+    (spawn (lambda ()
+             (let lp ()
+               (assert-ret-code (mosquitto_loop self.ptr timeout 100) 'loop)
+               (thread-yield!)
+               (lp))))))
 
 ;;
 
