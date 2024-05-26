@@ -46,7 +46,7 @@ mosquitto -c test/mosquitto.conf
 ```
 
 It may be desired to shutdown running mosquitto (to simulate failure) and re-run it again after some time,
-in this case following output may be observed to previously shown:
+in this case following output may be observed in addition to previously shown:
 
 > from `gxi example.ss`
 
