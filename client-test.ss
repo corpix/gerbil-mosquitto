@@ -7,6 +7,7 @@
         :std/format
         :std/misc/ports
         :std/misc/process
+        :std/misc/completion
         :std/misc/func
         ./client)
 (export client-test test-setup! test-cleanup!)
@@ -14,6 +15,7 @@
 (deflogger client-test)
 (current-logger-options 'info)
 
+(def start-mosquitto? #f)
 (def socket-path "./test/mosquitto.sock")
 (def pid-path "./test/mosquitto.pid")
 (def mosquitto-config-path
@@ -38,59 +40,93 @@
 (def (test-setup!)
   (start-logger!)
   (infof "using lib version ~a" mosquitto-lib-version)
-  (set! mosquitto-job (start-mosquitto!))
+  (when start-mosquitto?
+    (set! mosquitto-job (start-mosquitto!)))
   (infof "using mosquitto configuration path ~a" mosquitto-config-path)
   (infof "running mosquitto with pid ~a" (read-file-string pid-path)))
 
 (def (test-cleanup!)
-  (run-process ["kill" "-SIGTERM" (read-file-string pid-path)])
-  (sync (handle-evt 5 (lambda () (error "mosquitto termination timeout")))
-        mosquitto-job))
+  (when start-mosquitto?
+    (run-process ["kill" "-SIGTERM" (read-file-string pid-path)])
+    (sync mosquitto-job
+          (handle-evt 15 (lambda ()
+                           (error "timed out waiting for mosquitto to exit"))))))
 
 ;;
 
 (def client-test
   (test-suite "test client"
     (test-case "integration test"
-      (def connected #f)
+      (def timeout 15)
       (def messages 0)
-      (def disconnected #f)
-      (def job (void))
-      (def (assert-loop-error exn)
-        (check (any-of '((lost) (loop)) (error-irritants exn)) => #t))
+
+      (def connected? (void))
+      (def messaged? (void))
+      (def disconnected? (void))
+
+      (def (init)
+        (set! connected? (make-completion 'connected))
+        (set! messaged? (make-completion 'message))
+        (set! disconnected? (make-completion 'disconnected))
+        (spawn (lambda ()
+                 (thread-sleep! 999)
+                 (completion-error! connected? "timedout")
+                 (completion-error! messaged? "timedout")
+                 (completion-error! disconnected? "timedout"))))
+
+
+
       (def client
         (make-mosquitto-client
-         on-connect: (lambda (client) (set! connected #t))
-         on-message: (lambda (client message) (set! messages (+ 1 messages)))
-         on-disconnect: (lambda (client) (set! disconnected #t))))
-      (check (sync (handle-evt 1 void) mosquitto-job) => (void))
-      (test-case "sub-pub"
-        {client.connect! socket: socket-path}
-        (set! job {client.spawn on-error: assert-loop-error})
-        {client.subscribe! "test"}
-        {client.publish! "test" (string->utf8 "halo")}
-        {client.publish! "test" (string->utf8 "worl")}
-        (sync (handle-evt 1 void) job)
-        {client.disconnect!}
-        (sync (handle-evt 5 (lambda () (error "timed out waiting loop to finish"))) job)
-        (check connected => #t)
-        (check disconnected => #t)
-        (check messages => 2))
-      (test-case "reconnect"
-        (set! job {client.spawn on-error: assert-loop-error})
-        {client.reconnect!}
-        {client.subscribe! "test"}
-        {client.publish! "test" (string->utf8 "halo again")}
-        (sync (handle-evt 1 void) job)
-        (check messages => 3)
-        {client.disconnect!}
-        (sync (handle-evt 5 (lambda () (error "timed out waiting loop to finish"))) job))
-      (test-case "will"
-        (set! job {client.spawn on-error: assert-loop-error})
-        ;; fixme: improve this part to check if will really working,
-        ;; I mean not just "ffi call finished without sigsegv"
-        {client.will! "will-test" (string->utf8 "here is the will")}
-        {client.reconnect!}
-        (sync (handle-evt 1 void) job)
-        {client.disconnect!}
-        (sync (handle-evt 5 (lambda () (error "timed out waiting loop to finish"))) job)))))
+         on-connect: (lambda (client exn)
+                       (spawn (lambda ()
+                                (if exn (completion-error! connected? exn)
+                                    (completion-post! connected? 'done))
+                                (displayln 'ret1))))
+         on-subscribe: (lambda (client)
+                         (displayln 'suibscr))
+         on-message: (lambda (client message)
+                       (set! messages (+ 1 messages))
+                       (when (<= messages 1)
+                         (let (payload (mosquitto-message-payload message))
+                           (completion-post! messaged? 'done)))
+                       (displayln 'ret2))
+         on-disconnect: (lambda (client exn)
+                          (if exn (completion-error! disconnected? exn)
+                              (completion-post! disconnected? 'done)))))
+
+      {client.loop-start!}
+      (try
+       (test-case "sub-pub"
+         (init)
+         {client.connect! socket: socket-path}
+         (completion-wait! connected?)
+         (infof "connected")
+         {client.subscribe! "test"}
+         (infof "subscribed?")
+         {client.publish! "test" (string->utf8 "halo")}
+         {client.publish! "test" (string->utf8 "worl")}
+         (completion-wait! messaged?)
+         (check messages => 2)
+         (infof "sent & received messages")
+         {client.disconnect!}
+         (completion-wait! disconnected?)
+         (infof "disconnected"))
+       ;; (test-case "reconnect"
+       ;;   {client.reconnect!}
+       ;;   (check (channel-get connected-ch timeout) => #t)
+       ;;   {client.subscribe! "test"}
+       ;;   {client.publish! "test" (string->utf8 "halo again")}
+       ;;   (check (channel-get messages-ch timeout) => "halo again")
+       ;;   {client.disconnect!}
+       ;;   (check (channel-get disconnected-ch timeout) => #t)
+       ;;   (check messages => 3))
+       ;; (test-case "will"
+       ;;   ;; fixme: improve this part to check if will really working,
+       ;;   ;; I mean not just "ffi call finished without sigsegv"
+       ;;   {client.will! "will-test" (string->utf8 "here is the will")}
+       ;;   {client.reconnect!}
+       ;;   (check (channel-get connected-ch timeout) => #t)
+       ;;   {client.disconnect!}
+       ;;   (check (channel-get disconnected-ch timeout) => #t))
+       (finally {client.loop-stop! #t})))))

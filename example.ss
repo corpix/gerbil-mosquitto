@@ -4,29 +4,33 @@
         :std/event
         :mosquitto/client)
 
-(def mosquitto-loop (void))
+(def (on-connect client exn)
+  (displayln "connected!")
+  {client.subscribe! "test"})
+
+(def (on-message client message)
+  (displayln (format "got a message on topic ~a with payload ~a"
+                     (@ message topic)
+                     (utf8->string (@ message payload)))))
+
+(def (on-disconnect client exn)
+  (displayln "disconnected :(")
+  ;; try to reconnect, it will reconnect automatically,
+  ;; no need to call it more than once after disconnect
+  ;; it will show an error immediatelly
+  (try {client.reconnect!}
+       (catch (e) (displayln e))))
+
+;;
+
 (def client
   (make-mosquitto-client
-   on-connect: (lambda (client) (displayln "connected!"))
-   on-message: (lambda (client message)
-                 (displayln (format "got a message on topic ~a with payload ~a"
-                                    (@ message topic)
-                                    (utf8->string (@ message payload)))))
-   on-disconnect: (lambda (client) (displayln "disconnected :("))))
-
+   on-connect: on-connect
+   on-message: on-message
+   on-disconnect: on-disconnect))
+{client.loop-start!}
 {client.connect! socket: "./test/mosquitto.sock"}
-
-(set! mosquitto-loop {client.spawn})
-
-{client.subscribe! "test"}
 {client.publish! "test" (string->utf8 "hello")}
 {client.publish! "test" (string->utf8 "world")}
 
-(let loop ()
-  (sync mosquitto-loop)
-  (try {client.reconnect!}
-       (set! mosquitto-loop {client.spawn})
-       (catch (exn)
-         (displayln exn)
-         (thread-sleep! 2))
-       (finally (loop))))
+(sync (handle-evt 999999 void))

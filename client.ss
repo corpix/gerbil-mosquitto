@@ -1,5 +1,6 @@
 (import :std/foreign
-        :std/sugar)
+        :std/sugar
+        :std/error)
 (export make-mosquitto-client
         mosquitto-clients
         mosquitto-client
@@ -20,6 +21,7 @@
         mosquitto-message-payload
         mosquitto-message-qos
         mosquitto-message-retain
+        mosquitto-error?
 
         mosquitto-lib-version)
 
@@ -37,6 +39,7 @@
             mosquitto-clients-ref
             mosquitto-log-levels
             make-mosquitto-message
+            make-mosquitto-error
 
             make-int*
             int*->number
@@ -59,32 +62,37 @@
 
   (c-define (on_connect ptr user-data rc) (mosquitto* (pointer void) int)
             void "mosquitto_on_connect" ""
-            (unless (eq? rc CONNACK_ACCEPTED)
-              (error (mosquitto_connack_string rc)
-                (cond
-                 ((= rc CONNACK_REFUSED_NOT_AUTHORIZED) 'not-authorized)
-                 ((= rc CONNACK_REFUSED_BAD_USERNAME_PASSWORD) 'bad-username-password)
-                 ((= rc CONNACK_REFUSED_SERVER_UNAVAILABLE) 'server-unavailable)
-                 ((= rc CONNACK_REFUSED_IDENTIFIER_REJECTED) 'identifier-rejected)
-                 ((= rc CONNACK_REFUSED_PROTOCOL_VERSION) 'protocol-version)
-                 (else 'unknown))))
             (let* ((client (mosquitto-clients-ref ptr))
                    (callback (mosquitto-client-on-connect client)))
               (when (procedure? callback)
-                (callback client))))
+                (callback client
+                          (if (eq? rc CONNACK_ACCEPTED) #f
+                              (make-mosquitto-error
+                               (mosquitto_connack_string rc)
+                               irritants:
+                               (cond
+                                ((= rc CONNACK_REFUSED_NOT_AUTHORIZED) 'not-authorized)
+                                ((= rc CONNACK_REFUSED_BAD_USERNAME_PASSWORD) 'bad-username-password)
+                                ((= rc CONNACK_REFUSED_SERVER_UNAVAILABLE) 'server-unavailable)
+                                ((= rc CONNACK_REFUSED_IDENTIFIER_REJECTED) 'identifier-rejected)
+                                ((= rc CONNACK_REFUSED_PROTOCOL_VERSION) 'protocol-version)
+                                (else 'unknown))))))))
   (c-define (on_disconnect ptr user-data rc) (mosquitto* (pointer void) int)
             void "mosquitto_on_disconnect" ""
-            (unless (eq? rc MOSQ_ERR_SUCCESS)
-              (error (mosquitto_strerror rc)
-                (cond
-                 ;; todo: not sure about set of this consts, need to test various disconnect reasons
-                 ((= rc MOSQ_ERR_CONN_REFUSED) 'refused)
-                 ((= rc MOSQ_ERR_CONN_LOST) 'lost)
-                 (else 'unknown))))
             (let* ((client (mosquitto-clients-ref ptr))
                    (callback (mosquitto-client-on-disconnect client)))
               (when (procedure? callback)
-                (callback client))))
+                (callback client
+                          (if (eq? rc MOSQ_ERR_SUCCESS) #f
+                              (make-mosquitto-error
+                               (mosquitto_strerror rc)
+                               irritants:
+                               (cond
+                                ;; todo: not sure about set of this consts,
+                                ;; need to test various disconnect reasons
+                                ((= rc MOSQ_ERR_CONN_REFUSED) 'refused)
+                                ((= rc MOSQ_ERR_CONN_LOST) 'lost)
+                                (else 'unknown))))))))
   (c-define (on_publish ptr user-data mid) (mosquitto* (pointer void) int)
             void "mosquitto_on_publish" ""
             (let* ((client (mosquitto-clients-ref ptr))
@@ -109,7 +117,8 @@
                              (mosquitto_message_qos message)
                              (mosquitto_message_retain message)))))))
   (c-define (on_subscribe ptr user-data mid qos-count granted-qos) (mosquitto* (pointer void) int int (pointer int))
-            ;; todo: should we pass qos-count & granted-qos to user? looks like very low-level kind of things
+            ;; todo: should we pass qos-count & granted-qos to user?
+            ;; looks like very low-level kind of things
             ;; maybe through dynamic scope to make them optional?
             void "mosquitto_on_subscribe" ""
             (let* ((client (mosquitto-clients-ref ptr))
@@ -130,6 +139,19 @@
                 (let ((level-name (assoc level mosquitto-log-levels)))
                   (callback client (cdr level-name) str))))))
 
+(deferror-class MosquittoError () mosquitto-error?)
+
+;; fixme: for some magic reason I can't pass Error or (deferror-class MosquittoError)
+;; into begin-ffi, so we will use lambda as proxy
+;; *** ERROR IN __with-lock --
+;; *** ERROR IN ?
+;; --- Syntax Error at (expand mosquitto/client): Bad binding; rebind conflict
+;; ... form:   MosquittoError
+;; ... detail: #<extern-binding #8 id: mosquitto/client#MosquittoError key: MosquittoError phi: 0>
+;; ... detail: #<syntax-binding #9 id: |mosquitto/client[:0:]#MosquittoError| key: MosquittoError phi: 0 e: #<user-expander #10>>
+(def (make-mosquitto-error err irritants: (irritants #f))
+  (MosquittoError err irritants: irritants))
+
 ;;
 
 (def (assert-errno result)
@@ -145,11 +167,11 @@
 ;;
 
 (def mosquitto-log-levels
-    (list [MOSQ_LOG_INFO . 'log-info]
-          [MOSQ_LOG_NOTICE . 'log-notice]
-          [MOSQ_LOG_WARNING . 'log-warning]
-          [MOSQ_LOG_ERR . 'log-err]
-          [MOSQ_LOG_DEBUG . 'log-debug]))
+  (list [MOSQ_LOG_INFO . 'log-info]
+        [MOSQ_LOG_NOTICE . 'log-notice]
+        [MOSQ_LOG_WARNING . 'log-warning]
+        [MOSQ_LOG_ERR . 'log-err]
+        [MOSQ_LOG_DEBUG . 'log-debug]))
 
 ;;
 
@@ -331,34 +353,19 @@
 
 (defmethod {reconnect! mosquitto-client}
   (lambda (self)
-    (assert-ret-code (mosquitto_reconnect self.ptr) 'recconnect)))
+    (assert-ret-code (mosquitto_reconnect self.ptr) 'reconnect)))
 
 (defmethod {disconnect! mosquitto-client}
   (lambda (self)
     (assert-ret-code (mosquitto_disconnect self.ptr) 'disconnect)))
 
-(defmethod {loop mosquitto-client}
-  (lambda (self (timeout 1000))
-    (assert-ret-code (mosquitto_loop self.ptr timeout 1) 'loop)))
+(defmethod {loop-start! mosquitto-client}
+  (lambda (self)
+    (assert-ret-code (mosquitto_loop_start self.ptr) 'loop-start)))
 
-(defmethod {loop-forever mosquitto-client}
-  (lambda (self (timeout 1000))
-    (assert-ret-code (mosquitto_loop_forever self.ptr timeout 1) 'loop-forever)))
-
-(defmethod {spawn mosquitto-client}
-  (lambda (self wait-timeout: (wait-timeout 10)
-                on-error: (on-error #f))
-    (spawn
-     (lambda ()
-       (let loop ()
-         (def result
-           (try {self.loop wait-timeout}
-                (catch (exn)
-                  (when on-error (on-error exn))
-                  exn)))
-         (unless (error? result)
-           (thread-yield!)
-           (loop)))))))
+(defmethod {loop-stop! mosquitto-client}
+  (lambda (self (force? #f))
+    (assert-ret-code (mosquitto_loop_stop self.ptr force?) 'loop-stop)))
 
 ;;
 
