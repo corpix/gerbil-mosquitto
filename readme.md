@@ -64,3 +64,7 @@ subscription 4
 got a message on topic test with payload hello
 got a message on topic test with payload world
 ```
+
+## credits
+
+- thanks to Dmitry Kosenkov for [chicken-mosquitto](https://github.com/Junker/chicken-mosquitto) which I've used to get initial implementation to work
