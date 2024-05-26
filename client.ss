@@ -162,7 +162,7 @@
 (def (assert-ret-code rc (context #f))
   (if (eq? rc MOSQ_ERR_SUCCESS)
     rc
-    (error (mosquitto_strerror rc) context)))
+    (error (mosquitto_strerror rc) rc context)))
 
 ;;
 
@@ -363,9 +363,15 @@
   (lambda (self timeout: (timeout 10))
     (spawn (lambda ()
              (let lp ()
-               (assert-ret-code (mosquitto_loop self.ptr timeout 100) 'loop)
-               (thread-yield!)
-               (lp))))))
+               (try
+                (assert-ret-code (mosquitto_loop self.ptr timeout 100) 'loop)
+                (catch (exn)
+                  ;; ignore "client not connected" kind of errors,
+                  ;; they force user to create loop after connecting
+                  (unless (= (car (error-irritants exn)) MOSQ_ERR_NO_CONN)
+                    (raise exn)))
+                (finally (thread-yield!)
+                         (lp))))))))
 
 ;;
 

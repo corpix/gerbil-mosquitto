@@ -5,6 +5,7 @@
         :std/sugar
         :std/iter
         :std/format
+        :std/hash-table
         :std/misc/ports
         :std/misc/process
         :std/misc/completion
@@ -32,10 +33,10 @@
                     ["mosquitto" "-c" mosquitto-config-path])))
     (sync (handle-evt 5 (lambda () (error "timed out waiting for mosquitto to start")))
           (spawn (lambda ()
-                   (let loop ()
+                   (let lp ()
                      (unless (file-exists? pid-path)
                        (thread-sleep! 0.01)
-                       (loop))))))))
+                       (lp))))))))
 
 (def (test-setup!)
   (start-logger!)
@@ -58,75 +59,97 @@
   (test-suite "test client"
     (test-case "integration test"
       (def timeout 15)
-      (def messages 0)
 
       (def connected? (void))
+      (def subscribed? (void))
       (def messaged? (void))
       (def disconnected? (void))
 
-      (def (init)
+      (def (setup-completions!)
         (set! connected? (make-completion 'connected))
+        (set! subscribed? (make-completion 'subscribed))
         (set! messaged? (make-completion 'message))
         (set! disconnected? (make-completion 'disconnected))
-        (spawn (lambda ()
-                 (thread-sleep! 999)
-                 (completion-error! connected? "timedout")
-                 (completion-error! messaged? "timedout")
-                 (completion-error! disconnected? "timedout"))))
-
-
+        (def threads (make-hash-table))
+        (for (completion [connected? subscribed? messaged? disconnected?])
+          (hash-put! threads
+                     completion
+                     (spawn (lambda ()
+                              (thread-sleep! timeout)
+                              (completion-error! completion "timedout"))))
+          ;; cancelation of delayed deadlines
+          (make-will completion
+                     (lambda (completion)
+                       (thread-terminate! (hash-ref threads completion)))))
+        (thread-yield!))
 
       (def client
         (make-mosquitto-client
          on-connect: (lambda (client exn)
-                       (spawn (lambda ()
-                                (if exn (completion-error! connected? exn)
-                                    (completion-post! connected? 'done))
-                                (displayln 'ret1))))
-         on-subscribe: (lambda (client)
-                         (displayln 'suibscr))
+                       (if exn (completion-error! connected? exn)
+                           (completion-post! connected? 'done)))
+         on-subscribe: (lambda (client mid)
+                         (completion-post! subscribed? mid))
          on-message: (lambda (client message)
-                       (set! messages (+ 1 messages))
-                       (when (<= messages 1)
-                         (let (payload (mosquitto-message-payload message))
-                           (completion-post! messaged? 'done)))
-                       (displayln 'ret2))
+                       (let (payload (mosquitto-message-payload message))
+                         (completion-post! messaged? (if (void? payload) payload (utf8->string payload)))))
          on-disconnect: (lambda (client exn)
                           (if exn (completion-error! disconnected? exn)
                               (completion-post! disconnected? 'done)))))
 
-      {client.loop-start!}
+      (def loop {client.loop!})
+
       (try
        (test-case "sub-pub"
-         (init)
+         (setup-completions!)
          {client.connect! socket: socket-path}
-         (completion-wait! connected?)
+         (check (completion-wait! connected?) => 'done)
          (infof "connected")
          {client.subscribe! "test"}
-         (infof "subscribed?")
-         {client.publish! "test" (string->utf8 "halo")}
-         {client.publish! "test" (string->utf8 "worl")}
-         (completion-wait! messaged?)
-         (check messages => 2)
+         (check (> (completion-wait! subscribed?) 0) => #t)
+         (infof "subscribed")
+         {client.publish! "test" (string->utf8 "hello")}
+         (check (completion-wait! messaged?) => "hello")
          (infof "sent & received messages")
          {client.disconnect!}
-         (completion-wait! disconnected?)
+         (check (completion-wait! disconnected?) => 'done)
          (infof "disconnected"))
-       ;; (test-case "reconnect"
-       ;;   {client.reconnect!}
-       ;;   (check (channel-get connected-ch timeout) => #t)
-       ;;   {client.subscribe! "test"}
-       ;;   {client.publish! "test" (string->utf8 "halo again")}
-       ;;   (check (channel-get messages-ch timeout) => "halo again")
-       ;;   {client.disconnect!}
-       ;;   (check (channel-get disconnected-ch timeout) => #t)
-       ;;   (check messages => 3))
-       ;; (test-case "will"
-       ;;   ;; fixme: improve this part to check if will really working,
-       ;;   ;; I mean not just "ffi call finished without sigsegv"
-       ;;   {client.will! "will-test" (string->utf8 "here is the will")}
-       ;;   {client.reconnect!}
-       ;;   (check (channel-get connected-ch timeout) => #t)
-       ;;   {client.disconnect!}
-       ;;   (check (channel-get disconnected-ch timeout) => #t))
-       (finally {client.loop-stop! #t})))))
+       (test-case "reconnect"
+         (setup-completions!)
+         {client.reconnect!}
+         (check (completion-wait! connected?) => 'done)
+         (infof "reconnected")
+         {client.disconnect!}
+         (check (completion-wait! disconnected?) => 'done)
+         (infof "disconnected"))
+       (test-case "will"
+         (setup-completions!)
+         {client.will! "will-test" (string->utf8 "here is the will")}
+         {client.reconnect!}
+         (check (completion-wait! connected?) => 'done)
+         (infof "reconnected")
+         (def sub-connected? (make-completion 'sub-connected))
+         (def sub-subscribed? (make-completion 'sub-subscribed))
+         (def will-triggered? (make-completion 'will-triggered))
+         (def sub-client
+           (make-mosquitto-client
+            on-connect: (lambda (client exn)
+                          (if exn (completion-error! connected? exn)
+                              (completion-post! sub-connected? 'done)))
+            on-subscribe: (lambda (client mid)
+                            (completion-post! sub-subscribed? 'done))
+            on-message: (lambda (client message)
+                          (let (payload (mosquitto-message-payload message))
+                            (completion-post! will-triggered? (utf8->string payload))))))
+         (def sub-loop {sub-client.loop!})
+         {sub-client.connect! socket: socket-path}
+         (check (completion-wait! sub-connected?) => 'done)
+         {sub-client.subscribe! "will-test"}
+         (check (completion-wait! sub-subscribed?) => 'done)
+         (thread-terminate! loop)
+         (infof "simulating ungraceful shutdown")
+         (check (completion-wait! will-triggered?) => "here is the will")
+         {sub-client.disconnect!}
+         (thread-terminate! sub-loop))
+       (finally (thread-terminate! loop)
+                (check (thread-state-running? loop) => #f))))))
