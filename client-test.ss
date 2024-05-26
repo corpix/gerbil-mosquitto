@@ -13,16 +13,23 @@
         ./client)
 (export client-test test-setup! test-cleanup!)
 
+;; MOSQUITTO_CONFIG_PATH - if presented should contain path to mosquitto config (keep in mind hardcoded `socket-path` & `pid-path`)
+;; MOSQUITTO_NOSTART - if presented (value don't matter) it is expected mosquitto was started using `make mosquitto`
+
 (deflogger client-test)
 (current-logger-options 'info)
 
-(def start-mosquitto? #f)
+;;
+
+(def start-mosquitto? (if (get-environment-variable "MOSQUITTO_NOSTART") #f #t))
 (def socket-path "./test/mosquitto.sock")
 (def pid-path "./test/mosquitto.pid")
 (def mosquitto-config-path
   (or (get-environment-variable "MOSQUITTO_CONFIG_PATH")
       "test/mosquitto.conf"))
 (def mosquitto-job (void))
+
+;;
 
 (def (start-mosquitto!)
   (for (path [socket-path pid-path])
@@ -146,8 +153,8 @@
          (check (completion-wait! sub-connected?) => 'done)
          {sub-client.subscribe! "will-test"}
          (check (completion-wait! sub-subscribed?) => 'done)
-         (thread-terminate! loop)
          (infof "simulating ungraceful shutdown")
+         (thread-terminate! loop)
          (check (completion-wait! will-triggered?) => "here is the will")
          {sub-client.disconnect!}
          (thread-terminate! sub-loop))

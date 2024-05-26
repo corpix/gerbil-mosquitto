@@ -36,7 +36,7 @@
    on-subscribe: on-subscribe
    on-message: on-message
    on-disconnect: on-disconnect))
-{client.loop!}
+(def loop {client.loop!})
 {client.connect! socket: "./test/mosquitto.sock"}
 
-(sync (handle-evt 999999 void))
+(sync loop)
