@@ -258,7 +258,6 @@
     }
   ")
   (define-c-lambda mosquitto_connect_callback_set (mosquitto* (function (mosquitto* (pointer void) int) void)) void "mosquitto_connect_callback_set")
-  (define-c-lambda mosquitto_connect_callback_set (mosquitto* (function (mosquitto* (pointer void) int) void)) void "mosquitto_connect_callback_set")
   (define-c-lambda mosquitto_disconnect_callback_set (mosquitto* (function (mosquitto* (pointer void) int) void)) void "mosquitto_disconnect_callback_set")
   (define-c-lambda mosquitto_publish_callback_set (mosquitto* (function (mosquitto* (pointer void) int) void)) void "mosquitto_publish_callback_set")
   (define-c-lambda mosquitto_message_callback_set (mosquitto* (function (mosquitto* (pointer void) mosquitto_message*) void)) void "ffi_mosquitto_message_callback_set")
