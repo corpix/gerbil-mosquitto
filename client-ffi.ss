@@ -97,7 +97,6 @@
             mosquitto_tls_opts_set
             mosquitto_tls_psk_set
             mosquitto_connect_callback_set
-            mosquitto_connect_callback_set
             mosquitto_disconnect_callback_set
             mosquitto_publish_callback_set
             mosquitto_message_callback_set
