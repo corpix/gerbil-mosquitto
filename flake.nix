@@ -32,6 +32,7 @@
           packages = [
             pkgs.coreutils
             pkgs.gnumake
+            pkgs.git
             pkgs.gcc
             pkgs.glibc #.static;
             pkgs.zlib.static
