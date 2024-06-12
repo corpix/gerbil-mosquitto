@@ -211,13 +211,15 @@
                 on-subscribe: (on-subscribe #f)
                 on-unsubscribe: (on-unsubscribe #f)
                 on-log: (on-log #f)
-                thread-per-callback?: (thread-per-callback? #t))
+                on-error: (on-error #f))
     (let ((ptr (assert-errno (mosquitto_new id clean-session #f)))
-          (wrap (lambda (callback)
-                  (and callback
-                       (if thread-per-callback?
-                         (lambda arguments (spawn (lambda () (apply callback arguments))))
-                         callback)))))
+          (with-on-error (lambda (callback)
+                           (and callback
+                                (lambda arguments
+                                  (spawn (lambda ()
+                                           (with-catch
+                                            (or on-error (lambda (exn) (raise exn)))
+                                            (lambda() (apply callback arguments))))))))))
       (set! (@ self ptr) ptr)
       (set! (@ self user-data) user-data)
       (mosquitto-client-register! self)
@@ -231,13 +233,13 @@
       (mosquitto_subscribe_callback_set ptr on_subscribe)
       (mosquitto_unsubscribe_callback_set ptr on_unsubscribe)
       (mosquitto_log_callback_set ptr on_log)
-      (set! (@ self on-connect) (wrap on-connect))
-      (set! (@ self on-disconnect) (wrap on-disconnect))
-      (set! (@ self on-publish) (wrap on-publish))
-      (set! (@ self on-message) (wrap on-message))
-      (set! (@ self on-subscribe) (wrap on-subscribe))
-      (set! (@ self on-unsubscribe) (wrap on-unsubscribe))
-      (set! (@ self on-log) (wrap on-log))
+      (set! (@ self on-connect) (with-on-error on-connect))
+      (set! (@ self on-disconnect) (with-on-error on-disconnect))
+      (set! (@ self on-publish) (with-on-error on-publish))
+      (set! (@ self on-message) (with-on-error on-message))
+      (set! (@ self on-subscribe) (with-on-error on-subscribe))
+      (set! (@ self on-unsubscribe) (with-on-error on-unsubscribe))
+      (set! (@ self on-log) (with-on-error on-log))
       self)))
 
 (defmethod {connect! mosquitto-client}
