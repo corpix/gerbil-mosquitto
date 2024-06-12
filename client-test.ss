@@ -90,6 +90,9 @@
                        (thread-terminate! (hash-ref threads completion)))))
         (thread-yield!))
 
+      (def (on-error exn)
+        (display-exception exn)
+        (exit 1))
       (def client
         (make-mosquitto-client
          on-connect: (lambda (client exn)
@@ -102,7 +105,8 @@
                          (completion-post! messaged? (if (void? payload) payload (utf8->string payload)))))
          on-disconnect: (lambda (client exn)
                           (if exn (completion-error! disconnected? exn)
-                              (completion-post! disconnected? 'done)))))
+                              (completion-post! disconnected? 'done)))
+         on-error: on-error))
 
       (def loop {client.loop!})
 
@@ -147,7 +151,8 @@
                             (completion-post! sub-subscribed? 'done))
             on-message: (lambda (client message)
                           (let (payload (mosquitto-message-payload message))
-                            (completion-post! will-triggered? (utf8->string payload))))))
+                            (completion-post! will-triggered? (utf8->string payload))))
+            on-error: on-error))
          (def sub-loop {sub-client.loop!})
          {sub-client.connect! socket: socket-path}
          (check (completion-wait! sub-connected?) => 'done)
