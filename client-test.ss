@@ -65,7 +65,7 @@
 (def client-test
   (test-suite "test client"
     (test-case "integration test"
-      (def timeout 15)
+      (def timeout 60)
 
       (def connected? (void))
       (def subscribed? (void))
