@@ -210,8 +210,14 @@
                 on-message: (on-message #f)
                 on-subscribe: (on-subscribe #f)
                 on-unsubscribe: (on-unsubscribe #f)
-                on-log: (on-log #f))
-    (let ((ptr (assert-errno (mosquitto_new id clean-session #f))))
+                on-log: (on-log #f)
+                thread-per-callback?: (thread-per-callback? #t))
+    (let ((ptr (assert-errno (mosquitto_new id clean-session #f)))
+          (wrap (lambda (callback)
+                  (and callback
+                       (if thread-per-callback?
+                         (lambda arguments (spawn (lambda () (apply callback arguments))))
+                         callback)))))
       (set! (@ self ptr) ptr)
       (set! (@ self user-data) user-data)
       (mosquitto-client-register! self)
@@ -225,13 +231,13 @@
       (mosquitto_subscribe_callback_set ptr on_subscribe)
       (mosquitto_unsubscribe_callback_set ptr on_unsubscribe)
       (mosquitto_log_callback_set ptr on_log)
-      (set! (@ self on-connect) on-connect)
-      (set! (@ self on-disconnect) on-disconnect)
-      (set! (@ self on-publish) on-publish)
-      (set! (@ self on-message) on-message)
-      (set! (@ self on-subscribe) on-subscribe)
-      (set! (@ self on-unsubscribe) on-unsubscribe)
-      (set! (@ self on-log) on-log)
+      (set! (@ self on-connect) (wrap on-connect))
+      (set! (@ self on-disconnect) (wrap on-disconnect))
+      (set! (@ self on-publish) (wrap on-publish))
+      (set! (@ self on-message) (wrap on-message))
+      (set! (@ self on-subscribe) (wrap on-subscribe))
+      (set! (@ self on-unsubscribe) (wrap on-unsubscribe))
+      (set! (@ self on-log) (wrap on-log))
       self)))
 
 (defmethod {connect! mosquitto-client}
@@ -240,7 +246,7 @@
                 port: (port 1883)
                 username: (username #f)
                 password: (password #f)
-                keepalive: (keepalive 5)
+                keepalive: (keepalive 30)
                 bind-address: (bind-address #f)
                 tls-cafile: (tls-cafile #f)
                 tls-capath: (tls-capath #f)
@@ -370,8 +376,8 @@
                   ;; they force user to create loop after connecting
                   (unless (= (car (error-irritants exn)) MOSQ_ERR_NO_CONN)
                     (raise exn)))
-                (finally (thread-yield!)
-                         (lp))))))))
+                (finally (thread-yield!)))
+               (lp))))))
 
 ;;
 
