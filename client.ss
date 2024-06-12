@@ -20,7 +20,7 @@
         mosquitto-message-topic
         mosquitto-message-payload
         mosquitto-message-qos
-        mosquitto-message-retain
+        mosquitto-message-retain?
         mosquitto-error?
 
         mosquitto-lib-version)
@@ -210,8 +210,16 @@
                 on-message: (on-message #f)
                 on-subscribe: (on-subscribe #f)
                 on-unsubscribe: (on-unsubscribe #f)
-                on-log: (on-log #f))
-    (let ((ptr (assert-errno (mosquitto_new id clean-session #f))))
+                on-log: (on-log #f)
+                on-error: (on-error #f))
+    (let ((ptr (assert-errno (mosquitto_new id clean-session #f)))
+          (with-on-error (lambda (callback)
+                           (and callback
+                                (lambda arguments
+                                  (spawn (lambda ()
+                                           (with-catch
+                                            (or on-error (lambda (exn) (raise exn)))
+                                            (lambda() (apply callback arguments))))))))))
       (set! (@ self ptr) ptr)
       (set! (@ self user-data) user-data)
       (mosquitto-client-register! self)
@@ -225,13 +233,13 @@
       (mosquitto_subscribe_callback_set ptr on_subscribe)
       (mosquitto_unsubscribe_callback_set ptr on_unsubscribe)
       (mosquitto_log_callback_set ptr on_log)
-      (set! (@ self on-connect) on-connect)
-      (set! (@ self on-disconnect) on-disconnect)
-      (set! (@ self on-publish) on-publish)
-      (set! (@ self on-message) on-message)
-      (set! (@ self on-subscribe) on-subscribe)
-      (set! (@ self on-unsubscribe) on-unsubscribe)
-      (set! (@ self on-log) on-log)
+      (set! (@ self on-connect) (with-on-error on-connect))
+      (set! (@ self on-disconnect) (with-on-error on-disconnect))
+      (set! (@ self on-publish) (with-on-error on-publish))
+      (set! (@ self on-message) (with-on-error on-message))
+      (set! (@ self on-subscribe) (with-on-error on-subscribe))
+      (set! (@ self on-unsubscribe) (with-on-error on-unsubscribe))
+      (set! (@ self on-log) (with-on-error on-log))
       self)))
 
 (defmethod {connect! mosquitto-client}
@@ -240,7 +248,7 @@
                 port: (port 1883)
                 username: (username #f)
                 password: (password #f)
-                keepalive: (keepalive 5)
+                keepalive: (keepalive 30)
                 bind-address: (bind-address #f)
                 tls-cafile: (tls-cafile #f)
                 tls-capath: (tls-capath #f)
@@ -338,16 +346,16 @@
       (int*->number mid))))
 
 (defmethod {will! mosquitto-client}
-  (lambda (self topic payload qos: (qos 0) retain: (retain #f))
+  (lambda (self topic payload qos: (qos 0) retain?: (retain? #f))
     (let ((len (if (void? payload) 0 (u8vector-length payload))))
-      (assert-ret-code (mosquitto_will_set self.ptr topic len payload qos retain)
+      (assert-ret-code (mosquitto_will_set self.ptr topic len payload qos retain?)
                        'will))))
 
 (defmethod {publish! mosquitto-client}
-  (lambda (self topic payload qos: (qos 0) retain: (retain #f))
+  (lambda (self topic payload qos: (qos 0) retain?: (retain? #f))
     (let ((mid (make-int*))
           (len (if (void? payload) 0 (u8vector-length payload))))
-      (assert-ret-code (mosquitto_publish self.ptr mid topic len payload qos retain)
+      (assert-ret-code (mosquitto_publish self.ptr mid topic len payload qos retain?)
                        'publish)
       (int*->number mid))))
 
@@ -370,8 +378,8 @@
                   ;; they force user to create loop after connecting
                   (unless (= (car (error-irritants exn)) MOSQ_ERR_NO_CONN)
                     (raise exn)))
-                (finally (thread-yield!)
-                         (lp))))))))
+                (finally (thread-yield!)))
+               (lp))))))
 
 ;;
 
@@ -387,5 +395,5 @@
 ;;
 
 (defstruct mosquitto-message
-  (id topic payload qos retain)
+  (id topic payload qos retain?)
   transparent: #t)

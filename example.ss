@@ -14,6 +14,7 @@
   (displayln (format "subscription ~a" mid)))
 
 (def (on-message client message)
+  ;; (error "oops") ;; test error handler
   (displayln (format "got a message on topic ~a with payload ~a"
                      (@ message topic)
                      (utf8->string (@ message payload)))))
@@ -35,7 +36,9 @@
    on-connect: on-connect
    on-subscribe: on-subscribe
    on-message: on-message
-   on-disconnect: on-disconnect))
+   on-disconnect: on-disconnect
+   on-error: (lambda (exn)
+               (displayln (format "got an error: ~a" exn)))))
 (def loop {client.loop!})
 {client.connect! socket: "./test/mosquitto.sock"}
 
