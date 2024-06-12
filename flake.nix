@@ -40,8 +40,6 @@
             (pkgs.sqlite.overrideAttrs (super: { configureFlags = super.configureFlags ++ ["--enable-static" "--disable-shared"]; }))
             gerbil.packages.${arch}.static
             mosquitto
-
-            self.packages.${arch}.default
           ];
 
         in {
