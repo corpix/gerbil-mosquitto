@@ -20,7 +20,7 @@
         mosquitto-message-topic
         mosquitto-message-payload
         mosquitto-message-qos
-        mosquitto-message-retain
+        mosquitto-message-retain?
         mosquitto-error?
 
         mosquitto-lib-version)
@@ -344,16 +344,16 @@
       (int*->number mid))))
 
 (defmethod {will! mosquitto-client}
-  (lambda (self topic payload qos: (qos 0) retain: (retain #f))
+  (lambda (self topic payload qos: (qos 0) retain?: (retain? #f))
     (let ((len (if (void? payload) 0 (u8vector-length payload))))
-      (assert-ret-code (mosquitto_will_set self.ptr topic len payload qos retain)
+      (assert-ret-code (mosquitto_will_set self.ptr topic len payload qos retain?)
                        'will))))
 
 (defmethod {publish! mosquitto-client}
-  (lambda (self topic payload qos: (qos 0) retain: (retain #f))
+  (lambda (self topic payload qos: (qos 0) retain?: (retain? #f))
     (let ((mid (make-int*))
           (len (if (void? payload) 0 (u8vector-length payload))))
-      (assert-ret-code (mosquitto_publish self.ptr mid topic len payload qos retain)
+      (assert-ret-code (mosquitto_publish self.ptr mid topic len payload qos retain?)
                        'publish)
       (int*->number mid))))
 
@@ -393,5 +393,5 @@
 ;;
 
 (defstruct mosquitto-message
-  (id topic payload qos retain)
+  (id topic payload qos retain?)
   transparent: #t)
