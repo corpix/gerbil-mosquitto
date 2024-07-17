@@ -1,7 +1,7 @@
 {
   inputs = {
     nixpkgs.url = "tarball+https://git.tatikoma.dev/corpix/nixpkgs/archive/v2024-05-29.632320.tar.gz";
-    gerbil.url = "tarball+https://git.tatikoma.dev/corpix/gerbil-nix/archive/v2024-07-15.41.tar.gz";
+    gerbil.url = "tarball+https://git.tatikoma.dev/corpix/gerbil-nix/archive/v2024-07-17.42.tar.gz";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
