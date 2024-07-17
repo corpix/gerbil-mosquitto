@@ -5,8 +5,10 @@
     flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { self, nixpkgs, flake-utils, gerbil }:
-    flake-utils.lib.eachDefaultSystem
+  outputs = { self, nixpkgs, flake-utils, gerbil }: let
+    eachSystem = flake-utils.lib.eachSystem flake-utils.lib.allSystems;
+  in
+    eachSystem
       (arch:
         let
           pkgs = nixpkgs.legacyPackages.${arch}.pkgs;
