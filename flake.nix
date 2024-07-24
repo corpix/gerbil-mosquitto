@@ -1,7 +1,7 @@
 {
   inputs = {
-    nixpkgs.url = "tarball+https://github.com/corpix/nixpkgs/archive/v2024-07-19.655026.tar.gz";
-    gerbil.url = "tarball+https://github.com/corpix/gerbil-nix/archive/v2024-07-20.50.tar.gz";
+    nixpkgs.url = "tarball+https://github.com/corpix/nixpkgs/archive/v2024-07-23.655030.tar.gz";
+    gerbil.url = "tarball+https://github.com/corpix/gerbil-nix/archive/v2024-07-23.54.tar.gz";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
@@ -36,14 +36,10 @@
             pkgs.gnumake
             pkgs.git
             pkgs.gcc
-            # pkgs.glibc.static
-            # (pkgs.zlib.override { shared = false; static = true; })
-            # (pkgs.openssl.override { static = true; })
-            # (pkgs.sqlite.overrideAttrs (super: { configureFlags = super.configureFlags ++ ["--enable-static" "--disable-shared"]; }))
-            pkgs.glibc
-            pkgs.zlib
-            pkgs.openssl
-            pkgs.sqlite
+            pkgs.glibc.static
+            (pkgs.zlib.override { shared = false; static = true; })
+            (pkgs.openssl.override { static = true; })
+            (pkgs.sqlite.overrideAttrs (super: { configureFlags = super.configureFlags ++ ["--enable-static" "--disable-shared"]; }))
             gerbil.packages.${arch}.gerbil-static
             mosquitto
           ];

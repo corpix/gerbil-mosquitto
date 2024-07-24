@@ -42,38 +42,38 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1721440667,
-        "narHash": "sha256-TopCFOu+GgPnQaci6wONPc6TkjGn1O59KtzilW/MyqM=",
+        "lastModified": 1721713585,
+        "narHash": "sha256-GtZEhQw4vVeJnKTJIkemGZ0UkmRhdOuUo1k/rNoEz3M=",
         "type": "tarball",
-        "url": "https://github.com/corpix/gerbil-nix/archive/v2024-07-20.50.tar.gz"
+        "url": "https://github.com/corpix/gerbil-nix/archive/v2024-07-23.54.tar.gz"
       },
       "original": {
         "type": "tarball",
-        "url": "https://github.com/corpix/gerbil-nix/archive/v2024-07-20.50.tar.gz"
+        "url": "https://github.com/corpix/gerbil-nix/archive/v2024-07-23.54.tar.gz"
       }
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1721335127,
-        "narHash": "sha256-B53H5Vn9r1Wm1yAWrrUthYmwRvhSBRF78UvO0DJWvh4=",
+        "lastModified": 1721713469,
+        "narHash": "sha256-KXZ4XO/coPOTewmd9DLJHIRPReWmLLoZvN/3VptNs4U=",
         "type": "tarball",
-        "url": "https://github.com/corpix/nixpkgs/archive/v2024-07-19.655026.tar.gz"
+        "url": "https://github.com/corpix/nixpkgs/archive/v2024-07-23.655030.tar.gz"
       },
       "original": {
         "type": "tarball",
-        "url": "https://github.com/corpix/nixpkgs/archive/v2024-07-19.655026.tar.gz"
+        "url": "https://github.com/corpix/nixpkgs/archive/v2024-07-23.655030.tar.gz"
       }
     },
     "nixpkgs_2": {
       "locked": {
-        "lastModified": 1721335127,
-        "narHash": "sha256-B53H5Vn9r1Wm1yAWrrUthYmwRvhSBRF78UvO0DJWvh4=",
+        "lastModified": 1721713469,
+        "narHash": "sha256-KXZ4XO/coPOTewmd9DLJHIRPReWmLLoZvN/3VptNs4U=",
         "type": "tarball",
-        "url": "https://github.com/corpix/nixpkgs/archive/v2024-07-19.655026.tar.gz"
+        "url": "https://github.com/corpix/nixpkgs/archive/v2024-07-23.655030.tar.gz"
       },
       "original": {
         "type": "tarball",
-        "url": "https://github.com/corpix/nixpkgs/archive/v2024-07-19.655026.tar.gz"
+        "url": "https://github.com/corpix/nixpkgs/archive/v2024-07-23.655030.tar.gz"
       }
     },
     "root": {
